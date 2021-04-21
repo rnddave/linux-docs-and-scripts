@@ -1,0 +1,36 @@
+pvcreate /dev/sdb1
+vgcreate vg01 -v /dev/sdb1
+vgscan
+lvcreate -L 4G vg01
+lvscan
+gfs_mkfs -p lock_dlm -t lgncluster02:gfs01 -j 2 /dev/vg01/lvol0
+mount -t gfs /dev/vg01/lvol0 /usr01
+
+#Add a new journal file
+lvresize -L +200M /dev/vg01/lvol0
+gfs_jadd -j 1  /dev/vg01/lvol0
+
+#Resize the disk
+	gfs_grow /dev/vg01/lvol0
+	[root@nllumlgna0184 ~]# df /usr01
+	Filesystem           1K-blocks      Used Available Use% Mounted on
+	/dev/mapper/vg01-lvol0
+	                       3931808        20   3931788   1% /usr01
+	[root@nllumlgna0184 ~]# gfs_grow /dev/vg01/lvol0
+	FS: Mount Point: /usr01
+	FS: Device: /dev/vg01/lvol0
+	FS: Options: rw,noatime,nodiratime
+	FS: Size: 1081344
+	DEV: Size: 1099776
+	Preparing to write new FS information...
+	Done.
+	[root@nllumlgna0184 ~]# df /usr01
+	Filesystem           1K-blocks      Used Available Use% Mounted on
+	/dev/mapper/vg01-lvol0
+	                       4005520        20   4005500   1% /usr01
+	[root@nllumlgna0184 ~]#
+
+
+#Create a snapshot
+lvcreate --size 200m --snapshot  --name snapshot01 /dev/vg01/lvol0
+

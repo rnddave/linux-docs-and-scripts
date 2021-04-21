@@ -1,0 +1,70 @@
+Installation:
+minimal
+
+Packages:
+epel
+    yum -y install fping nethogs iperf atop 
+    yum -y install nagios nagios-plugins-all
+
+tmp filesystem:
+    systemctl is-enabled tmp.mount
+    systemctl enable tmp.mount
+
+Networking:
+hostname set via dns or vi /etc/hostname
+
+uuidgen eno16777984     #find uuid for network interface
+
+Disable NetworkManager:
+    - if DHCP is not used, it prevents /etc/resolv.conf to be overwritten
+    - systemctl disable NetworkManager.service
+
+Useradministration
+useradd -c "$REAL_NAME" -G wheel,users $USER
+
+authconfig-tui
+    krb5-workstation
+    pam-krb5
+
+    vi /etc/pam.d/su
+    visudo
+
+Firewall:
+firewall-cmd
+    zones
+    firewall-cmd --get-active-zones
+    firewall-cmd --zone=public --list-all
+    firewall-cmd --get-services
+    firewall-cmd --reload
+
+or use iptables:
+ yum -y install iptables-services
+ systemctl stop firewalld.service
+ systemctl disable firewalld.service
+ vi /etc/sysconfig/iptables
+ systemctl enable iptables.service
+ systemctl start iptables.service
+
+hardening:
+    ssh
+    limits.conf
+    issue, motd
+snmpd:
+    vi snmpd.conf
+    systemctl enable snmpd
+    systemctl start snmpd
+    firewall-cmd --zone=work --add-port=161/udp --permanent
+    firewall-cmd --zone=work --add-port=161/udp
+
+
+httpd:
+    firewall-cmd --zone=public --add-service http --permanent
+    firewall-cmd --zone=public --add-service http
+    firewall-cmd --zone=public --add-service https --permanent
+    firewall-cmd --zone=public --add-service https
+
+Time:
+   systemctl stop chronyd.service
+   systemctl disable chronyd.service
+   systemctl enable ntpd.service
+   systemctl start ntpd.service

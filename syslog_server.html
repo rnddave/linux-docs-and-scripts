@@ -1,0 +1,77 @@
+<html>
+<head>
+ <title>Syslog server on RedHat ES3</title>
+ <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+ <h3>Syslog server on RedHat ES3</h3>
+
+ <p>
+	For auditing purposes a remote syslog server is setup on RedHat ES3. This service is used
+	by the Tru64 machines.
+ </p>
+
+ <p>
+	<b>Installation:</b>
+	<ul>
+		<li>Install a RedHat ES3 server (minumum installation)</li> 
+		<li>Configure it as a firewall: allow <b>ssh</b> and <b>514:udp</b></li> 
+	</ul>
+ </p>
+
+ <p>
+	<b>Configuration:</b>
+	<ul>
+		<li>
+			<b>vi /etc/sysconfig/iptables</b><br>
+			Change the rule with udp: <i>-s 10.31.17.0/24</i>
+		</li> 
+		<li>
+			<b>vi /etc/sysconfig/syslog</b><br>
+			Change the options: <i>SYSLOGD_OPTIONS="-m 0 -r -x -s nlhag.lummusonline.com"</i>
+		</li> 
+		<li>
+			Make the firewall rule-file read-only: <b>chmod 400 /etc/sysconfig/iptables</b><br>
+		</li> 
+		<li>
+			Load the firewall rules: <b>cat /etc/sysconfig/iptables | iptables-restore</b>
+		</li> 
+		<li>
+			Reload the syslog service: <b>service syslog restart</b>
+		</li> 
+	</ul>
+ </p>
+
+ <p>
+	<b>Configuration on Tru64:</b>
+	<ul>
+		<li>
+			<b>vi /etc/hosts</b><br>
+			(Add <i>10.31.17.63 nllumlgna2152</i>)
+		</li>
+		<li>
+			<b>vi /etc/syslogd.conf</b><br>
+			(Add <i>*.notice                @nllumlgna2152</i>)
+		</li>
+		<li>
+			Reload syslog: <b>kill -1 `cat /var/run/syslog.pid`</b>
+		</li>
+		<li>
+			To test: <b>logger -p lpr.notice "Goede morgen"</b><br>
+			See if the messages arrived on Linux: <i>tail /var/log/messages</i>
+		</li>
+	</ul>
+ </p>
+
+ <p>
+	<b>View the log file:</b>
+	<ul>
+		<li>Login as root on the Linux machine</li>
+		<li><b>view /var/log/messages</b> or</li>
+		<li><b>emacs /var/log/messages</b> or</li>
+		<li><b>more /var/log/messages</b> or</li>
+		<li><b>grep 10.31.17.16 /var/log/messages | more</b></li>
+	</ul>
+ </p>
+</body>
+</html>

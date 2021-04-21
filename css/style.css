@@ -1,0 +1,9 @@
+:root {
+    --color1: coral;
+    --color2: #343cac;
+    --color3: #2e2d2c;
+  }
+
+body {
+    font-family: 'Share Tech Mono', monospace;
+}

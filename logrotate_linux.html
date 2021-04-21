@@ -1,0 +1,93 @@
+<html>
+<head>
+ <title>Log files on Linux</title>
+ <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+ <h3>Log files on Linux</h3>
+
+ <p>
+	On Linux several processes are creating log files.
+	These logfiles can become very larege.
+	Therefor maintenance is needed on the log files to refresh or shrink them.<br>
+	The Linux OS uses a utility to maintain the several log files. This utility
+	is called <b>logrotate</b>.<br>
+	This document describes how to use the logrotate utility for the Lummus log files
+	on the Linux machines.
+ </p>
+
+ <p>
+	On RedHat Linux the logrotate utility is started as a cronjob (/etc/crontab).
+	The job runs every day (/etc/cron.daily/logrotate).<br>
+	Logrotate reads the configuration from the file <b>/etc/logrotate.conf</b>
+	and the files in the directory <b>/etc/logrotate.d</b>. With this information
+	it will clean the logfiles of several applications running on the machine.<br>
+ </p>
+
+ <p>
+	The default installation of Linux will not clean the Lummus specific logfiles.
+	To use logrotate for this purpose there are 2 approaches:
+	<ol>
+		<li>Create logrotate config files in /etc/logrotate.d</li>
+		<li>Create separate config files in /usr/applic/spt/ITS/etc</li>
+	</ol>
+	The disadvantage of the first is that it becomes unclear what the Lummus
+	specific environment is and what belongs to the OS. Also at what time the
+	job will run can not be changed.<br>
+	The second option has the disadvantage that a separate cronjob must be created.<br>
+	Choosen is for the first option:
+	<ul>
+		<li>Create the file /etc/logrotate.d/lummus that contains lummus log files</li>
+		<li>Easy to copy/restore</li>
+		<li>No extra Scheduling</li>
+	</ul>
+ </p>
+
+ <p>
+	A view examples of the Lummus logrotate configuration file:
+		<table border class=pre_view><tr><td><pre>
+#do the defaults
+/home/$USER/log/test0.log {
+        missingok
+}
+
+#do not create an empty new file
+/home/$USER/log/test1.log {
+        nocreate
+        missingok
+}
+
+#create an empty new file
+/home/$USER/log/test2.log {
+        create
+        missingok
+}
+
+#create an empty new file with a mode, optionally a user and group
+/home/$USER/log/test3.log {
+        create 666
+        missingok
+}
+
+#for a process thats keeps the file open. The log file will keep the inode:
+/home/$USER/log/test4.log {
+        missingok
+        copytruncate
+}
+
+#copy the rotated log file to a separate directory
+/home/$USER/log/test5.log {
+        missingok
+        olddir old
+}
+
+#keep the original file
+/home/$USER/log/test6.log {
+        daily
+        missingok
+        copy
+}
+		</pre></td></tr></table>
+ </p>
+</body>
+</html>

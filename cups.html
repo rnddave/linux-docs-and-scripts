@@ -1,0 +1,183 @@
+<html>
+<head>
+ <title>CUPS printing on Linux</title>
+ <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+ <h3>CUPS printing on Linux</h3>
+
+ <p>
+	The printing software on Linux is called <i>CUPS</i>. Cups has the same interface as lpsched found
+	on S5R4 unix systems. Besides the lpsched commands Cups supports the lpd commands.<br>
+	This document describes the CUPS software. Topics covered in this document:
+
+	<ol>
+		<li><a href=#print>Print a job</a></li>
+		<li><a href=#status>Status of a queue</a></li>
+		<li><a href=#delete>Delete a printjob</a></li>
+		<li><a href=#add>Add a printer</a></li>
+		<li><a href=#remove>Remove a printer</a></li>
+		<li><a href=#default>Set the default printer</a></li>
+		<li><a href=#enable>Enable/disable printing to a printer</a></li>
+		<li><a href=#web>WebInterface to do administrative tasks</a></li>
+		<li><a href=#client>Configure client access</a></li>
+	</ol>
+ </p>
+
+ <br><hr><br>
+
+ <ol>
+	<li><a name=print></a><h4>Print a job</h4>
+		<ul>
+			<li><b>lp -d printer file</b></li>
+			<li><b>lp -d printer -o raw file</b> (to specify no filtering)</li>
+			<li><b>lpr -P printer file</b></li>
+			<li><b>lpr -P printer -o raw file</b> (to specify no filtering)</li>
+			<li>Other usefull options:
+				<ul>
+					<li><b>-o media=A4</b></li>
+					<li><b>-o media=letter</b></li>
+					<li><b>-o portrait</b></li>
+					<li><b>-o landscape</b></li>
+					<li><b>-o sides=two-sided-long-edge</b></li>
+					<li><b>-o sides=two-sided-short-edge</b></li>
+				</ul>
+			</li>
+		</ul>
+		<br><br>
+	</li>
+
+	<li><a name=status></a><h4>Status of a queue</h4>
+		<ul>
+			<li>Status can also be shown in the <a href=#web>WebInterface</a></li>
+			<li><b>lpstat -o printer</b> (to view the jobs printed to the specified printer)</li>
+			<li><b>lpstat -o</b> (to view the current print jobs)</li>
+			<li><b>lpstat -p</b> (to view all printers and if they are enabled)</li>
+			<li><b>lpstat -p printer</b> (to view if the specified printer is enabled)</li>
+			<li><b>lpstat -t</b> (to view all information about all printers and jobs)</li>
+		</ul>
+		<br><br>
+	</li>
+
+	<li><a name=delete></a><h4>Delete a printjob</h4>
+		<ul>
+			<li>Jobs can also be deleted in the <a href=#web>WebInterface</a></li>
+			<li><b>cancel job-id</b> (find the job-id with lpstat)</li>
+			<li><b>lprm job-id</b> (find the job-id with lpstat)</li>
+		</ul>
+		<br><br>
+	</li>
+
+	<li><a name=add></a><h4>Add a printer</h4>
+		<ul>
+			<li>Printers can also be created in the <a href=#web>WebInterface</a></li>
+			<li><b>lpadmin -p nllumlgnp0189 -E -m laserjet.ppd.gz -v lpd://nllumlgnprint1.nlhag.lummusonline.com/nllumlgnp0189 -D comment -L location</b><br>
+				The options are:
+				<ul>
+					<li><b>-m</b> The model. The available models: <b>lpinfo -m</b><br>
+					To add models:
+					<ul>
+						<li>find the <b>ppd</b> file belonging to a printer (try to find it on Windows)</li>
+						<li>copy the ppd file to <b>/usr/share/cups/model</b></li>
+						<li>reload cups: <b>service cups restart</b></li>
+					</ul>
+					</li>
+					<li><b>-v</b> The device. The available devices: <b>lpinfo -v</b></li>
+					<li><b>-E</b> Enable the printer when it is created</li>
+					<li><b>-D</b> Comment</li>
+					<li><b>-L</b> Location (also comment)</li>
+				</ul>
+			</li>
+			<li><b>lpoptions -d nllumlgnp0189 -o media=A4</b> (specify default options for this printer).
+				To see the options: <b>lpoptions -p nllumlgnp0189 -l</b>
+			</li>
+		</ul>
+		<br><br>
+	</li>
+
+	<li><a name=remove></a><h4>Remove a printer</h4>
+		<ul>
+			<li>Printers can also be deleted in the <a href=#web>WebInterface</a></li>
+			<li><b>lpadmin -x printer</b></li>
+		</ul>
+		<br><br>
+	</li>
+
+	<li><a name=default></a><h4>Set the default printer</h4>
+		<ul>
+			<li>Default printer can also be specified in the <a href=#web>WebInterface</a></li>
+			<li><b>lpadmin -d printer</b></li>
+		</ul>
+		<br><br>
+	</li>
+
+	<li><a name=enable></a><h4>Enable/disable printing to a printer</h4>
+		<ul>
+			<li><b>accept printer</b> (allows jobs to be queued on a printqueue)</li>
+			<li><b>reject printer</b> (jobs can not be queued on a printqueue anymore)</li>
+			<li><b>cupsenable printer</b> (jobs are send to the printer)</li>
+			<li><b>cupsdisable printer</b> (jobs are not send to the printer)</li>
+		</ul>
+		<br><br>
+	</li>
+
+	<li><a name=web></a><h4>WebInterface to do administration tasks</h4>
+		All the administration tasks can be done via the Webinterface of CUPS. To start it go the the URL
+		<b>http://localhost:631</b><br>
+		Default the Webinterface only is on the interface 127.0.0.1 (security) reasons. To go to the URL on a server
+		when logged in via a ssh session a text browser is needed. On Linux the elinks browser is a good
+		text browser: <b>elinks http://localhost:631</b>. Even the mouse works in elinks!<br>
+		If the confirm questions are too irritating edit the file <b>~/.elinks/elinks.conf</b> and add the line
+		<b>set document.browse.forms.confirm_submit = 0</b>
+
+		<p>
+			When doing administration tasks the webinterface will ask you to authenticate. Default only user
+			root is allowed to do this tasks. To enable this function for a group of users:
+			<ul>
+				<li><b>groupadd -g 802 abbadmin</b></li>
+				<li><b>for ff in cjki awe vsl ahagan ; do usermode -G abbadmin $ff; done</b></li>
+				<li><b>vi /etc/cups/cupsd.conf</b> and configure:
+					<ul>
+						<li>Find: <b>Location /admin</b></li>
+						<li><b>AuthClass Group</b> (was AuthClass System)</li>
+						<li><b>AuthGroupName abbadmin</b></li>
+						<li><b>service cups restart</b></li>
+					</ul>
+				</li>
+			</ul>
+		</p>
+		<br><br>
+	</li>
+
+	<li><a name=client></a><h4>Configure client access</h4>
+		<p>
+			Client access is that NodeA prints via the printers defined on NodeB. This way
+			printers only needs to be created on NodeB.
+		</p>
+		<p>To set up the server:
+			<ul>
+				<li><b>vi /etc/cups/cupsd.conf</b>
+					<ul>
+					<li>Allow From 10.31.20.32  # in the Location /</li>
+					<li>BrowseAllow from 10.31.20.32  #bottom of the file</li>
+					<li>Listen 10.31.17.33:631  #bottom of the file</li>
+					</ul>
+				</li>
+				<li><b>vi /etc/hosts.allow</b> cupsd: 10.31.20.32</li>
+				<li><b>service cups reload</b></li>
+			</ul>
+		</p>
+		<p>To set up the client:
+			<ul>
+				<li><b>vi /etc/cups/client.conf</b> ServerName nllumlgna0167.nlhag.lummusonline.com</li>
+			</ul>
+		</p>
+		<p>
+			Test it on the client with: <b>lpstat -t</b>
+		</p>
+		<br><br>
+	</li>
+ </ol>
+
+</body>
+</html>

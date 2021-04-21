@@ -1,0 +1,337 @@
+<html>
+<head>
+	<link rel=stylesheet type="text/css" href="css/style.css">
+ <title>RedHat EL5 hardening for a Reverse Proxy Server</title>
+</head>
+<body>
+
+<h3>RedHat EL5 hardening for a Squid Proxy Server</h3>
+
+<p>
+	This document describes the hardening of a RedHat EL5 server according <a href=http://www.cisecurity.org>www.cisecurity.org</a><br>
+	The numbering used in the document refers to the layout found in the CIsecurity document.<br>
+	The hardening in this document is for a Squid Reverse Proxy Server.
+</p>
+
+<hr>
+
+<p>
+	<h4>2. Patches</h4>
+	<ul>
+	  <li>View the settings in: <b>/etc/yum.conf</b>
+	  <li>To apply the latest patches: <b>yum -y update</b></li>
+	</ul>
+</p>
+
+<p>
+	<h4>2.3 Configure SSH</h4>
+	First create user accounts, that should have administrator rights. Direct login as root will be disabled.
+	<ul>
+	  <li><b>useradd -u 1000 -c "$REAL_NAME" -G wheel,users $REAL_NAME</b></li>
+	  <li><b>passwd $USER</b></li>
+	  <li><b>visudo</b> : Uncomment the line: <i>%wheel  ALL=(ALL)       ALL</i></li>
+	  <li><b>vi /etc/pam.d/su</b> : Uncomment the line: <i>auth            required        pam_wheel.so use_uid</i></li>
+	  <li>Install the SSH Public Key (created with Putty for example):
+		<ul>
+			<li><b>su - kees</b></li>
+			<li><b>mkdir .ssh</b></li>
+			<li><b>chmod 700 .ssh</b></li>
+			<li><b>ssh-keygen -i -f kees.pub >.ssh/authorized_keys</b> (if it is generated with putty)</li>
+			<li><b>chmod 600 .ssh/authorized_keys</b>
+			<li>check if a login as <i>kees</i> works with the Private key</li>
+		</ul>
+	  </li>
+	  <li>Configure SSH (client configuration): <b>vi /etc/ssh/ssh_config</b>:
+		<ul>
+		<li><b>Protocol 2</b></li>
+		</ul>
+	  </li>
+	  <li>Configure SSH (server configuration): <b>vi /etc/ssh/sshd_config</b>:
+		<ul>
+		<li><b>Protocol 2</b></li>
+		<li><b>LogLevel VERBOSE</b></li>
+		<li><b>PermitRootLogin no</b></li>
+		<li><b>PasswordAuthentication no</b></li>
+		<li><b>Banner /etc/issue.net</b></li>
+		<li><b>AllowGroups users</b></li>
+		</ul>
+	      <b>service sshd reload</b>
+	  </li>
+	</ul>
+</p>
+
+<p>
+	<h4>2.4 Sar</h4>
+	To install sar (if not already installed): <b>yum -y install sysstat</b>
+</p>
+
+<p>
+	<h4>3.1. Xinetd services</h4>
+	Check services managed by xinetd: <b>chkconfig --list</b> (the lines below <i>xinetd based services:</i><br>
+	If all xinetd managed services are off, disable xinetd: <b>chkconfig xinetd off; service xinetd stop</b><br>
+	Else disable the appropriate services: <b>chkconfig "service" off</b>
+</p>
+
+<p>
+	<h4>3.2 Configure TCP Wrappers and Firewall</h4>
+	TCPWrappers:
+	<ul>
+	  <li><b>vi /etc/hosts.allow</b>
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+ALL: localhost
+
+httpd: 172.16.0.0/255.240.0.0
+squid: 172.16.0.0/255.240.0.0
+sshd: 10.0.0.0/255.0.0.0 172.16.0.0/255.240.0.0
+		</pre></td></tr></table>
+	  </li>
+	  <li><b>vi /etc/hosts.deny</b>
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+ALL: ALL
+		</pre></td></tr></table>
+	  </li>
+	</ul>
+	Firewall (IPTABLES):
+	<ul>
+	   <li><b>vi /etc/sysconfig/iptables</b>
+	<table border=""><tr><td bgcolor=lightgrey><pre>
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -s 10.0.0.0/8 -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 5001 -j ACCEPT
+-A INPUT -p icmp --icmp-type any -j ACCEPT
+-A INPUT -d 10.31.39.255 -j DROP
+-A INPUT -d 255.255.255.255 -j DROP
+-A INPUT -j REJECT --reject-with icmp-host-prohibited
+COMMIT
+		</pre></td></tr></table>
+	  </li>
+	  <li><b>service iptables restart</b></li>
+	  <li>To check: <b>iptables -L -n -v --line-numbers</b></li>
+	</ul>
+</p>
+
+<p>
+	<h4>4.6 Disable Standard Boot Services</h4>
+	Run the following script to create a list of advised services to be disabled. Review/adjust the list:
+	<table border=""><tr><td bgcolor=lightgrey><pre>
+for Service in acpid amd anacron apmd arptables_jf aprwatch atd autofs avahi-daemon avahi-dnsconfd bpgd bluetooth bootparamd capi conman cups cyrus-imapd dc_client dc_server dhcdbd dhcp6s dhcpd dhcrelay dovecot dund firstboot gpm haldaemon hidd hplip ibmasm ip6tables ipmi irda iscsi iscsid isdn kadmin kdump kprop krb524 krb5kdc kudzu ldap lisa lm_sensors mailman mcstrans mdmonitor mdmpd microcode_ctl multipathd mysqld named netfs netplugd NetworkManager nfs nfslock nscd ntpd openibd ospf6d ospfd pand pcscd portmap postgresql privoxy psacct radvd rarpd rdisc readahead_early readahead_later rhnsd ripd ripngd rpcgssd rpcidmapd rpcsvcgssd rstatd rusersd rwhod saslauthd sendmail setroubleshoot smartd smb snmpd snmptrapd spamassassin tog-pegasus tomcat5 tux winbind wine wpa_supplicant xend xendomains xfs xinetd ypbind yppasswdd ypserv ypxfrd yum-updatesd zebra
+do
+        if IsOn=$(chkconfig --list $Service 2>/dev/null)
+        then
+                if echo $IsOn | grep "3:on" >/dev/null 2>&1
+                then
+                        echo "Service $Service is enabled"
+                        echo $Service >>tobedisabled.lst
+                else
+                        echo "Service $Service already disabled"
+                fi 
+        else
+                echo "No Service $Service on this node"
+        fi
+done
+echo "File tobedisabled.lst created. Edit this file"
+
+	</pre></td></tr></table>
+	Edit the file <i>tobedisabled.lst</i> and delete the lines of the services you want to keep. Next thing is to disable the services:
+	<b>for Service in $(cat tobedisabled.lst); do chkconfig $Service off; done</b>
+</p>
+
+<p>
+	<h4>5. System Network Parameter Tuning</h4>
+	<ul>
+	  <li><b>vi /etc/sysctl.conf</b> and add the following lines:
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+net.ipv4.conf.default.secure_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_max_syn_backlog = 4096
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv4.ip_forward = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+		</pre></td></tr></table>
+	  </li>
+	  <li>To activate the new settings: <b>sysctl -p</b></li>
+	</ul>
+</p>
+
+<p>
+	<h4>6.1. Syslog</h4>
+	<ul>
+	  <li><b>vi /etc/syslog.conf</b> and add the following lines:
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+authpriv.*		/var/log/secure
+auth.*			/var/log/messages
+		</pre></td></tr></table>
+	  </li>
+	  <li><b>chmod 600 /etc/syslog.conf</b></li>
+	</ul>
+</p>
+
+<p>
+	<h4>Syslog logs send to a remote host</h4>
+	Not on a node in the DMZ.
+</p>
+
+<p>
+	<h4>7.1. Add 'nodev' option to appropriate partitions in /etc/fstab</h4>
+	<ul>
+	  <li><b> vi /etc/fstab</b>
+		Add 'nodev' option to all ext3 filesystems except for '/'<br>
+		Add 'nosuid' to /home, /var, /tmp and the cdrom
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+LABEL=/usr              /usr                    ext3    defaults,nodev
+		 </pre></td></tr></table>
+	  </li>
+	</ul>
+</p>
+
+<p>
+	<h4>7.3 Disable User-Mounted Removable Filesystems</h4>
+	<ul>
+	  <li><b>vi /etc/security/console.perms.d/50-default.perms</b>
+		Disable the following &lt;console&gt; lines:<br>
+		<i>sound, fb, kbd, jpysticj, v4l, mainboard, gpm, scanner, memstick, diskonkey</i>
+	  </li>
+	  <li><b>chmod /etc/security/console.perms.d/50-default.perms</b></li>
+	</ul>
+</p>
+
+<p>
+	<h4>Disable USB Devices</h4>
+	To prevent USB devices being plugged into the machine disable USB.<br>
+	<ul>
+	<li>
+	<b>vi /etc/grub.conf</b> and add <i>nousb</i> to the <i>kernel</i> lines:
+	<table border=""><tr><td bgcolor=lightgrey><pre>
+kernel /vmlinuz-2.6.9-55.0.2.EL.XOS.1smp ro root=LABEL=/ rhgb quiet nousb
+	</pre></td></tr></table>
+	</li>
+	<li>
+		Or as alternative: <b>vi /etc/modprobe.conf</b> and add the line: <i>install usb-storage /bin/true</i>
+	</li>
+	</ul>
+</p>
+
+<p>
+	<h4>8.4 Restrict at/cron users</h4>
+	<ul>
+		<li><b>vi /etc/at.allow /etc/cron.allow</b> and add the users allowed to schedule jobs.</li>
+		<li><b>chmod 400 /etc/at.allow /etc/cron.allow /etc/crontab</b>
+	</ul>
+</p>
+
+<p>
+	<h4>8.7 Set Grub password.</h4>
+	<ul>
+		<li>Generate a password <b>grub-md5-crypt</b></li>
+		<li><b>vi /boot/grub/grub.conf</b> and add the line: <b>password --md5 somestring</b> (First item in grub.conf)</li> 
+		<li><b>chmod 600 /boot/grub/grub.conf</b></li>
+	</ul>
+</p>
+
+<p>
+	<h4>Require Authentication for Single-User Mode</h4>
+	<ul>
+		<li><b>vi /etc/inittab</b> Add:
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+# What to do in single-user mode.
+~:S:wait:/sbin/sulogin
+		</pre></td></tr></table>
+			(See <i>man inittab</i> for an example).
+		</li>
+		<li><b>chmod 600 /etc/inittab</b></li>
+	</ul>
+</p>
+
+<p>
+	<h4>9.3 Set Account Expiration Parameters on Active Accounts</h4>
+	Only do this on "real users", so not on user root or oracle. The password change for this users should be handled by the change management system.
+	<ul>
+		<li><b>chage -m 7 -M 60 $USER</b></li>
+		<li>To check the current settings: <b>chage -L kkistemaker</b></li>
+	</ul>
+</p>
+
+<p>
+	<h4>Disable core dumps</h4>
+	<ul>
+		<li><b>vi /etc/security/limits.conf</b> The following lines should be there:
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+*	soft core 0
+*	hard core 0
+		</pre></td></tr></table>
+		</li>
+	</ul>
+</p>
+
+<p>
+	<h4>Warning Banners</h4>
+	<ul>
+		<li><b>vi /etc/issue /etc/issue.net</b> with the content:
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+			NOTICE TO USERS
+			-----------------
+This computer system is the private property of $COMPANY, whether
+individual, corporate or government. It is for authorized use only. Users
+(authorized &amp; unauthorized) have no explicit/implicit expectation of privacy
+Any or all uses of this system and all files on this system may be
+intercepted, monitored, recorded, copied, audited, inspected, and disclosed
+to your employer, to authorized site, government, and/or law enforcement
+personnel, as well as authorized officials of government agencies, both
+domestic and foreign.
+By using this system, the user expressly consents to such interception,
+monitoring, recording, copying, auditing, inspection, and disclosure at the
+discretion of such officials. Unauthorized or improper use of this system
+may result in civil and criminal penalties and administrative or disciplinary
+action, as appropriate. By continuing to use this system you indicate your
+awareness of and consent to these terms and conditions of use. LOG OFF
+IMMEDIATELY if you do not agree to the conditions stated in this warning.
+		</pre></td></tr></table>
+		</li>
+		<li><b>vi /etc/motd</b>
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+Authorized use only. All activity may be monitored and reported.
+		</pre></td></tr></table>
+		</li>
+	</ul>
+</p>
+
+<p>
+	<h4>11.4. Password Complexity</h4>
+	<ul>
+	<li><b>vi /etc/pam.d/system-auth</b>
+	<table border=""><tr><td bgcolor=lightgrey><pre>
+password    requisite     pam_cracklib.so try_first_pass retry=3 -dcredit=-2 -lcredit=-2 -ocredit=-2 -ucredit=-2 -minlen=9
+	</pre></td></tr></table>
+	(password should contain 2 digits, 2 lowercases, 2 other, 2 uppercase and min. length is 9 characters)
+	</li>
+	<li>Note: the settings are overwritten when <b>authconfig</b> is run (this happens for example after an upgrade)</li>
+	</ul>
+</p>
+
+<p>
+	<h4>11.5. Restrict permissons on man pages</h4>
+	<b>chmod -R go-w /usr/share/doc /usr/local/share/doc</b>
+</p>
+
+<p>
+	<h4>To enable SElinux</h4>
+	<b>vi /etc/sysconfig/selinux</b> (SELINUX=enforcing)
+</p>
+
+</body>
+</html>

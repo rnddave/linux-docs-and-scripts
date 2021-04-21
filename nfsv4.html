@@ -1,0 +1,132 @@
+<html>
+<head>
+ <title>NFSv4 on Linux</title>
+ <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+ <h3>NFSv4 on Linux</h3>
+
+ <p>
+	NFSv4 has advantages above NFSv3. In general it will have a better performance (compound statements) then NFSv3.
+	Also it is designed to be used on WAN links. NFSv4 is more difficult to configure the NFSv3. Specially the way
+	the NFS server exports one virutal filesystem needs more configuration on the server side.<br>
+	Topics covered in this document:
+	<ol>
+		<li><a href=#daemon>Starting the NFS daemons on the NFS server and the NFS Client</a></li>
+		<li><a href=#map>Configuring Name mapping on the NFS server and the NFS Client</a></li>
+		<li><a href=#server>Configuring the NFS server</a></li>
+		<li><a href=#client1>Configuring the NFS client (mount the NFS filesytems separate)</a></li>
+		<li><a href=#client2>Configuring the NFS client (mount the NFS root)</a></li>
+	</ol>
+ </p>
+
+<hr>
+
+ <ol>
+        <li><a name=daemon></a><h4>Starting the NFS daemons on the NFS server and the NFS Client</h4>
+		Make sure the following services are configured and started:
+		<ul>
+			<li>portmap</li>
+			<li>nfs</li>
+			<li>nfslock</li>
+			<li>rpcimapd</li>
+		</ul>
+		For example:
+		<ul>
+			<li><b>chkconfig --list nfs</b></li>
+			<li><b>chkconfig nfs on</b></li>
+			<li><b>service nfs start</b></li>
+		</ul>
+		Configure TCPwrappers and the Firewall:
+		<ul>
+			<li><b>vi /etc/hosts.allow</b> #add the line: <i>portmap lockd mountd rquotad statd: 10.31.20.32</i></li>
+			<li>Make sure the firewall isn't blocking nfs traffic: <b>vi /etc/sysconfig/nfs</b> (on RHEL5)</li>
+		</ul>
+	</li>
+	<br>
+
+        <li><a name=map></a><h4>Configuring Name mapping on the NFS server and the NFS Client</h4>
+		<ul>
+			<li><b>vi /etc/idmapd.conf</b>
+				<table border=""><tr><td bgcolor=lightgrey><pre>
+		[General]
+
+Verbosity = 0
+Pipefs-Directory = /var/lib/nfs/rpc_pipefs
+Domain = $COMPANY.com
+
+[Mapping]
+
+Nobody-User = nfsnobody
+Nobody-Group = nfsnobody
+
+[Translation]
+Method = nsswitch
+				</pre></td></tr></table>
+			</li>
+			<li>
+				<b>service idmapd restart</b>
+			</li>
+		</ul>
+	</li>
+	<br>
+
+        <li><a name=server></a><h4>Configuring the NFS server</h4>
+		<ul>Create the NFS root directory
+			<li><b>mkdir -p /nfs4exports /nfs4exports/usr06/orarac /nfs4exports/usr07/orarac</b></li>
+			<li><b>vi /etc/fstab</b> #add the lines:
+				<table border=""><tr><td bgcolor=lightgrey><pre>
+#Bind entries for NFSv4
+/usr06/orarac           /nfs4exports/usr06/orarac none  bind             0 0
+/usr07/orarac           /nfs4exports/usr07/orarac none  bind             0 0
+				</pre></td></tr></table>
+			</li>
+			<li><b>mount -at none</b> (or manual with mount --bind)</li>
+			<li><b>vi /etc/exports</b>
+				<table border=""><tr><td bgcolor=lightgrey><pre>
+/nfs4exports            nllumlgna0187(ro,fsid=0,sync,no_wdelay,insecure_locks,no_subtree_check,anonuid=65534,anongid=65534) nllumlgna0188(rw,fsid=0,sync,no_wdelay,insecure_locks,no_root_squash,no_subtree_check,anonuid=65534,anongid=65534)
+/nfs4exports/usr06/orarac               nllumlgna0187(rw,sync,no_wdelay,insecure_locks,no_root_squash,no_subtree_check,anonuid=65534,anongid=65534,nohide) nllumlgna0188(rw,sync,no_wdelay,insecure_locks,no_root_squash,no_subtree_check,anonuid=65534,anongid=65534,nohide)
+/nfs4exports/usr07/orarac               nllumlgna0187(rw,sync,no_wdelay,insecure_locks,no_root_squash,no_subtree_check,anonuid=65534,anongid=65534,nohide) nllumlgna0188(rw,sync,no_wdelay,insecure_locks,no_root_squash,no_subtree_check,anonuid=65534,anongid=65534,nohide)
+				</pre></td></tr></table>
+			</li>
+			<li><b>exportfs -a</b> #to export the directories</li>
+			<li><b>exportfs</b> #to check</li>
+		</ul>
+	</li>
+	<br>
+
+        <li><a name=client1></a><h4>Configuring the NFS client (mount the NFS filesytems separate)</h4>
+		<ul>
+			<li><b>showmount -e nllumlgna0186</b> #to check the exports of the server</li>
+			<li><b>mkdir /usr06 /usr07</b></li>
+			<li><b>vi /etc/fstab</b>
+				<table border=""><tr><td bgcolor=lightgrey><pre>
+nllumlgna0186:/usr06/orarac   /usr06            nfs4   auto,rw,nodev,sync,proto=tcp,retry=10,rsize=32768,wsize=32768,hard,intr,actimeo=0 0 0
+nllumlgna0186:/usr07/orarac   /usr07            nfs4   auto,rw,nodev,sync,proto=tcp,retry=10,rsize=32768,wsize=32768,hard,intr,actimeo=0 0 0
+				</pre></td></tr></table>
+			</li>
+			<li><b>mount -at nfs4</b></li>
+		</ul>
+	</li>
+	<br>
+
+        <li><a name=client2></a><h4>Configuring the NFS client (mount the NFS root)</h4>
+		The difference with the previous is that only the NFS root is mounted on the Client. The disadvantage is that "df" is not working correctly.
+		<ul>
+			<li><b>showmount -e nllumlgna0186</b> #to check the exports of the server</li>
+			<li><b>mkdir -p /nfsmount/nllumlgna0186</b> #create the nfs mountdirectory</li>
+			<li><b>vi /etc/fstab</b>
+				<table border=""><tr><td bgcolor=lightgrey><pre>
+nllumlgna0186:/         /nfs4mount/nllumlgna0186 nfs4   auto,rw,nodev,sync,proto=tcp,retry=10,rsize=32768,wsize=32768,hard,intr,actimeo=0 0 0
+				</pre></td></tr></table>
+			</li>
+			<li><b>mount -at nfs4</b></li>
+			<li>Symbolic links might be needed to create the preferred directory lay-out</li>
+		</ul>
+	</li>
+	<br>
+
+</ol> 
+
+</body>
+</html>

@@ -1,0 +1,207 @@
+<html>
+<head>
+ <title>Rsyslog on RHEL7</title>
+ <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+ <h3>Rsyslog on RHEL7</h3>
+
+ <p>
+    The Syslog server on RHEL7 is RSYSLOG. Compared to SYSLOG much more can be configured on rsyslog. This document
+    describes the configuration of an rsyslog server
+ </p>
+
+ <p>
+    <b>Configuration:</b><br>
+    The syntax of rsyslog is complicated. It supports the native syslog syntax, the legacy rsyslog syntax and the
+    new RainerScript syntax. The 3 syntaxes can be used in one configuration. The best syntax is RainerScript. Legacy rsyslog
+    is confusing.<br>
+    RHEL7 installs default this /etc/rsyslog.conf file:
+    <table border class=pre_view><tr><td><pre>
+# rsyslog configuration file
+
+# For more information see /usr/share/doc/rsyslog-*/rsyslog_conf.html
+# If you experience problems, see http://www.rsyslog.com/doc/troubleshoot.html
+
+#### MODULES ####
+
+# The imjournal module bellow is now used as a message source instead of imuxsock.
+$ModLoad imuxsock # provides support for local system logging (e.g. via logger command)
+$ModLoad imjournal # provides access to the systemd journal
+#$ModLoad imklog # reads kernel messages (the same are read from journald)
+#$ModLoad immark  # provides --MARK-- message capability
+
+# Provides UDP syslog reception
+#$ModLoad imudp
+#$UDPServerRun 514
+
+# Provides TCP syslog reception
+#$ModLoad imtcp
+#$InputTCPServerRun 514
+
+
+#### GLOBAL DIRECTIVES ####
+
+# Where to place auxiliary files
+$WorkDirectory /var/lib/rsyslog
+
+# Use default timestamp format
+$ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
+
+# File syncing capability is disabled by default. This feature is usually not required,
+# not useful and an extreme performance hit
+#$ActionFileEnableSync on
+
+# Include all config files in /etc/rsyslog.d/
+$IncludeConfig /etc/rsyslog.d/*.conf
+
+# Turn off message reception via local log socket;
+# local messages are retrieved through imjournal now.
+$OmitLocalLogging on
+
+# File to store the position in the journal
+$IMJournalStateFile imjournal.state
+
+
+#### RULES ####
+
+# Log all kernel messages to the console.
+# Logging much else clutters up the screen.
+#kern.*                                                 /dev/console
+
+# Log anything (except mail) of level info or higher.
+# Don't log private authentication messages!
+*.info;mail.none;authpriv.none;cron.none                /var/log/messages
+
+# The authpriv file has restricted access.
+authpriv.*                                              /var/log/secure
+
+# Log all the mail messages in one place.
+mail.*                                                  -/var/log/maillog
+
+
+# Log cron stuff
+cron.*                                                  /var/log/cron
+
+# Everybody gets emergency messages
+*.emerg                                                 :omusrmsg:*
+
+# Save news errors of level crit and higher in a special file.
+uucp,news.crit                                          /var/log/spooler
+
+# Save boot messages also to boot.log
+local7.*                                                /var/log/boot.log
+
+
+# ### begin forwarding rule ###
+# The statement between the begin ... end define a SINGLE forwarding
+# rule. They belong together, do NOT split them. If you create multiple
+# forwarding rules, duplicate the whole block!
+# Remote Logging (we use TCP for reliable delivery)
+#
+# An on-disk queue is created for this action. If the remote host is
+# down, messages are spooled to disk and sent when it is up again.
+#$ActionQueueFileName fwdRule1 # unique name prefix for spool files
+#$ActionQueueMaxDiskSpace 1g   # 1gb space limit (use as much as possible)
+#$ActionQueueSaveOnShutdown on # save messages to disk on shutdown
+#$ActionQueueType LinkedList   # run asynchronously
+#$ActionResumeRetryCount -1    # infinite retries if host is down
+# remote host is: name/ip:port, e.g. 192.168.0.1:514, port optional
+#*.* @@remote-host:514
+# ### end of the forwarding rule ###
+    </pre></table>
+
+    <p>
+        The default configuration is made with the Legacy syntax (configuration starts with a "$").
+    </p>
+
+    <p>
+        To use RainerScript and configure a syslog server, the configuration looks like:
+        <table border class=pre_view><tr><td><pre>
+# rsyslog configuration file
+
+# For more information see /usr/share/doc/rsyslog-*/rsyslog_conf.html
+# If you experience problems, see http://www.rsyslog.com/doc/troubleshoot.html
+
+#### MODULES ####
+
+# The imjournal module bellow is now used as a message source instead of imuxsock.
+##$ModLoad imuxsock # provides support for local system logging (e.g. via logger command)
+module(load="imuxsock")
+#$ModLoad imjournal # provides access to the systemd journal
+module(load="imjournal")
+#$ModLoad imklog # reads kernel messages (the same are read from journald)
+#$ModLoad immark  # provides --MARK-- message capability
+
+# Provides UDP syslog reception
+module(load="imudp")
+input(type="imudp" port="514" ruleset="remote514")
+
+$AllowedSender UDP, 10.1.40.52, 10.1.170.81, 10.3.130.0/23, 10.3.134.45, 10.31.16.0/23, 10.36.0.0/23, 10.36.64.0/24, 10.45.2.48/31, 10.42.16.0/28, 10.42.66.32/27, 10.42.68.32/27, 10.42.70.32/27,
+10.42.72.32/27, 10.42.80.32/27, 10.42.82.32/27, 10.42.84.32/27, 10.42.86.32/27, 10.49.200.0/21, 10.65.32.24, 10.96.0.11, 10.96.64.52, 10.128.45.10, 10.134.38.92, 10.226.0.0/23, 10.226.127.0/24,
+10.226.255.0/24, 10.232.35.130, 10.232.35.156, 10.31.90.8
+
+#### GLOBAL DIRECTIVES ####
+
+# Where to place auxiliary files
+$WorkDirectory /var/lib/rsyslog
+
+# Use default timestamp format
+$ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
+
+template(name="DynFile" type="string" string="/usr02/syslog/%FROMHOST-IP%-%$YEAR%-%$MONTH%.txt")
+
+ruleset(name="remote514" queue.filename="remote"){
+    $RulesetCreateMainQueue on
+    action(type="omfile" fileOwner="$USER" fileGroup="users" fileCreateMode="0644" dynafile="DynFile")
+    stop
+}
+
+# Log all kernel messages to the console.
+# Logging much else clutters up the screen.
+#kern.*                                                 /dev/console
+
+# Log anything (except mail) of level info or higher.
+# Don't log private authentication messages!
+*.info;mail.none;authpriv.none;cron.none action(type="omfile" file="/var/log/messages")
+
+# The authpriv file has restricted access.
+authpriv.* action(type="omfile" file="/var/log/secure")
+
+# Log all the mail messages in one place.
+mail.* action(type="omfile" file="/var/log/maillog")
+
+
+# Log cron stuff
+cron.* action(type="omfile" file="/var/log/cron")
+
+# Everybody gets emergency messages
+*.emerg                                                 :omusrmsg:*
+
+# Save news errors of level crit and higher in a special file.
+uucp,news.crit action(type="omfile" file="/var/log/spooler")
+
+# Save boot messages also to boot.log
+local7.* action(type="omfile" file="/var/log/boot.log")
+        </pre></table>
+    </p>
+
+    <p>
+    <b>Test remote logging:</b>
+     <ul>
+        <li>Login as root on a Linux machine</li>
+        <li><b>vi /etc/rsyslog</b> and add the line: <b>local3.info @10.226.1.9</b></li>
+        <li><b>systemctl restart rsyslog.service</b></li>
+        <li>test logging: <b>logger -p local3.info test</b></li>
+        <li>Check for the file in /usr02/syslog</li>
+     </ul>
+    </p>
+
+    <p>
+        To clean old files: <b>crontab -e</b>
+        <table border class=pre_view><tr><td><pre>
+22 22 * * 0 find /usr02/syslog/ -name "*.txt" -type f -mtime +30 -exec rm -f "{}" ";"
+        </pre></table>
+    </p>
+</body>
+</html>

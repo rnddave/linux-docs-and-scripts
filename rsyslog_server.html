@@ -1,0 +1,329 @@
+<html>
+<head>
+ <title>Rsyslog server on RedHat EL5</title>
+ <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+ <h3>Rsyslog server on RedHat EL5</h3>
+
+ <p>
+	The default Syslog server on RHEL5 is SYSLOG. The optional rsyslog server can be used
+	to replace syslog. The advantage of rsyslog is that more can be configured. For example
+	separate files can be created for each remote client.
+ </p>
+
+ <p>
+	<b>Installation:</b>
+	<ul>
+		<li>Install a RedHat EL5 server (minumum installation)</li> 
+		<li>Install rsyslog: <b>yum -y install rsyslog</b></li> 
+		<li>Replace syslog with rsyslog:</li> 
+			<ul>
+				<li><b>service syslog stop</b></li>
+				<li><b>chkconfig syslog off</b></li>
+				<li><b>chkconfig rsyslog on</b></li>
+				<li><b>service rsyslog start</b></li>
+			</ul>
+		</li>
+		<li>rsyslog runs now in compatibility mode and has the same functionality as syslog</li>
+	</ul>
+ </p>
+
+ <p>
+	<b>Configuration:</b><br>
+	The goal is to leave the local logging untouched and put the remote log entries in separate files.
+	The remote log entries should be viewable via a webbrowser or via a Samba share. In the rsyslog version that
+	comes with RHEL5 the file creation mode is a global directive in the rsyslog configuration file. Default the
+	log files can only be read by user root (mode 600), but we want the remote log entries to be read by everyone (mode 644).
+	In newer version of rsyslog the directive <b>RuleSet</b> can be used to accomplish this, but in the RHEL5 version 2 rsyslog
+	instances need to be configured.
+	<ul>
+		<li>
+			<b>Convert from compatibility mode to rsyslog configuration</b>
+			<ul>
+				<li>stop rsyslog: <b>service rsyslog stop</b></li>
+				<li><b>vi /etc/rsyslog.conf</b>
+					<table border class=pre_view><tr><td><pre>
+#rsyslog v3 config file
+
+# if you experience problems, check
+# http://www.rsyslog.com/troubleshoot for assistance
+
+#### MODULES ####
+
+$ModLoad imuxsock.so	# provides support for local system logging (e.g. via logger command)
+$ModLoad imklog.so	# provides kernel logging support (previously done by rklogd)
+#$ModLoad immark.so	# provides --MARK-- message capability
+
+# Provides UDP syslog reception
+#$ModLoad imudp.so
+#$UDPServerRun 514
+
+# Provides TCP syslog reception
+#$ModLoad imtcp.so  
+#$InputTCPServerRun 514
+
+#### GLOBAL DIRECTIVES ####
+
+# Use default timestamp format
+$ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
+
+# File syncing capability is disabled by default. This feature is usually not required, 
+# not useful and an extreme performance hit
+#$ActionFileEnableSync on
+
+#### RULES ####
+
+# Log all kernel messages to the console.
+# Logging much else clutters up the screen.
+#kern.*                                                 /dev/console
+
+# Log anything (except mail) of level info or higher.
+# Don't log private authentication messages!
+*.info;mail.none;authpriv.none;cron.none                /var/log/messages
+
+# The authpriv file has restricted access.
+authpriv.*                                              /var/log/secure
+
+# Log all the mail messages in one place.
+mail.*                                                  -/var/log/maillog
+
+# Log cron stuff
+cron.*                                                  /var/log/cron
+
+# Everybody gets emergency messages
+*.emerg                                                 *
+
+# Save news errors of level crit and higher in a special file.
+uucp,news.crit                                          /var/log/spooler
+
+# Save boot messages also to boot.log
+local7.*                                                /var/log/boot.log
+
+					</pre></table>
+				</li>
+				<li><b>vi /etc/sysconfig/rsyslog</b>
+					<table border class=pre_view><tr><td><pre>
+SYSLOGD_OPTIONS="-c 3"
+					</pre></table>
+				</li>
+				<li>start rsyslog: <b>service rsyslog start</b></li>
+				<li>check the server: <b>tail /var/log/messages</b></li>
+				<li>test logging: <b>logger -p local3.info test; tail /var/log/messages</b></li>
+			</ul>
+		</li>
+		<li>
+			Configure the second rsyslog server listening on UDP port 514:
+			<ul>
+				<li><b>vi /etc/$COMPANY_rsyslog.conf</b>
+					<table border class=pre_view><tr><td><pre>
+#rsyslog v3 config file
+
+# if you experience problems, check
+# http://www.rsyslog.com/troubleshoot for assistance
+
+#### MODULES ####
+
+# Provides UDP syslog reception
+$ModLoad imudp.so
+$UDPServerRun 514
+
+#### GLOBAL DIRECTIVES ####
+
+# Use default timestamp format
+$ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
+
+# File syncing capability is disabled by default. This feature is usually not required, 
+# not useful and an extreme performance hit
+#$ActionFileEnableSync on
+
+$AllowedSender UDP, 10.7.17.0/28, 10.31.16.0/24, 10.31.192.49, 10.31.194.49, 10.31.198.240/28, 10.45.2.48/31 
+$FileCreateMode 0644
+$template DynFile,"/usr02/syslog/%HOSTNAME%-%$YEAR%-%$MONTH%.txt"
+
+:source , !isequal , "$LOCAL_OFFICE_NAME-mon1" ?DynFile
+					</pre></table>
+				</li>
+
+				<li>create the log directory: <b>mkdir /usr02/syslog</b></li>
+				<li>stop/start script: <b>vi /etc/rc.d/init.d/$COMPANY_rsyslog</b>
+					<table border class=pre_view><tr><td><pre
+#!/bin/bash
+#
+#
+# chkconfig: 345 98 98
+# description: start/stop Syslog server for network devices
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+#==================================================
+#Initialization
+#==================================================
+
+#Pid file
+PidFile=/var/run/$COMPANY_rsyslogd.pid
+
+#the rsyslog configuration file
+ConfFile=/etc/$COMPANY_rsyslog.conf
+
+#Proces name
+ProgName=rsyslogd
+
+#Path and name to rsyslogd
+Prog=/sbin/rsyslogd
+
+#Process string
+ProgStr="$ProgName -f $ConfFile"
+
+#==================================================
+#Functions
+#==================================================
+
+function status {
+  pgrep -f "$ProgStr" >/dev/null 2>&1
+  return $?
+} #status
+
+function start {
+  echo -n "Starting $COMPANY rsyslogd... "
+  if status ; then
+	echo -n "Rsyslog already running"; failure ; echo
+	return 1
+  fi
+
+  $Prog -f $ConfFile -i $PidFile -c 3
+  if ! status ; then
+	echo -n "Rsyslog failed to start"; failure ; echo
+	return 1
+  fi
+  success; echo
+  return 0
+} #start
+
+function stop {
+  echo -n "Stopping $COMPANY rsyslogd... "
+  if ! status ; then
+	echo -n "Rsyslog is not running"; failure ; echo
+	return 1
+  fi
+  kill $(pgrep -f "$ProgStr")
+  sleep 5
+  if status ; then
+	echo -n "Unable to stop rsyslog"; failure ; echo
+	return 1
+  fi
+  success; echo
+  return 0
+} #stop
+
+function restart {
+  stop
+  start
+  return $?
+} #restart
+
+function reload {
+  echo -n "Reloading $COMPANY rsyslogd... "
+  if status ; then
+	kill -HUP $(pgrep -f "$ProgStr")
+	success; echo
+	return 0
+  else
+	echo "Rsyslog is not running"; failure ; echo
+	return 1
+  fi
+} #reload
+
+#==================================================
+#MAIN
+#==================================================
+
+#See how we were called.
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    reload)
+	reload
+	;;
+    status)
+	if status
+	then echo "$COMPANY rsyslog is running ..."
+	else echo "$COMPANY rsyslog is NOT running ..."
+	fi
+	;;
+    *)
+        echo "Usage: $0 {start|stop|restart|reload|status}"
+        RETVAL=1
+esac
+
+exit $RETVAL
+					</pre></table>
+				</li>
+				<li><b>chmod 755 /etc/rc.d/init.d/$COMPANY_rsyslog</b></li>
+				<li><b>chkconfig --add $COMPANY_rsyslog</b></li>
+				<li><b>service $COMPANY_rsyslog start</b></li>
+			</ul>
+		</li>
+	</ul>
+ </p>
+
+ <p>
+	Optional configure the firewall:
+	<ul>
+		<li><b>vi /etc/sysconfig/iptables</b>
+			<table border class=pre_view><tr><td><pre>
+# Generated by iptables-save v1.3.5 on Fri May  4 13:11:36 2012
+*filter
+:INPUT ACCEPT [23378:4769657]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [3212:410504]
+-A INPUT -i lo -j ACCEPT 
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT 
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT 
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT 
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 139 -j ACCEPT 
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT 
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 444 -j ACCEPT 
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 883 -j ACCEPT 
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 5001 -j ACCEPT 
+-A INPUT -p udp -m state --state NEW -m udp --dport 137 -j ACCEPT 
+-A INPUT -p udp -m state --state NEW -m udp --dport 138 -j ACCEPT 
+-A INPUT -p udp -m state --state NEW -m udp --dport 877 -j ACCEPT 
+-A INPUT -p udp -m state --state NEW -m udp --dport 880 -j ACCEPT 
+-A INPUT -s 10.7.17.0/28 -p udp -m state --state NEW -m udp --dport 514 -j ACCEPT 
+-A INPUT -s 10.31.16.0/24 -p udp -m state --state NEW -m udp --dport 514 -j ACCEPT 
+-A INPUT -s 10.31.20.26 -p udp -m state --state NEW -m udp --dport 514 -j ACCEPT 
+-A INPUT -s 10.31.192.49 -p udp -m state --state NEW -m udp --dport 514 -j ACCEPT 
+-A INPUT -s 10.31.194.49 -p udp -m state --state NEW -m udp --dport 514 -j ACCEPT 
+-A INPUT -s 10.31.198.240/28 -p udp -m state --state NEW -m udp --dport 514 -j ACCEPT 
+-A INPUT -s 10.45.2.48/31 -p udp -m state --state NEW -m udp --dport 514 -j ACCEPT 
+-A INPUT -p icmp -m icmp --icmp-type any -j ACCEPT 
+-A INPUT -d 10.31.31.255 -j DROP 
+-A INPUT -d 255.255.255.255 -j DROP 
+-A INPUT -j REJECT --reject-with icmp-host-prohibited 
+COMMIT
+# Completed on Fri May  4 13:11:36 2012
+			</pre></table>
+		</li>
+	</ul>
+ </p>
+
+ <p>
+	<b>Test remote logging:</b>
+	<ul>
+		<li>Login as root on a Linux machine</li>
+		<li><b>vi /etc/syslog</b> and add the line: <b>local3.* @10.31.17.9</b></li>
+		<li>test logging: <b>logger -p local3.info test</b></li>
+		<li>Check for the file in /usr02/syslog</li>
+	</ul>
+ </p>
+</body>
+</html>

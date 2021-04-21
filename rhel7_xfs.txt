@@ -1,0 +1,3 @@
+xfs_info /home  #get info for the filesystem
+xfs_admin -L /home /dev/home/centos-home    #(re-)label a unmounted filesystem
+xfs_growfs /home    #resize a filesysem. Reducing the size is not possible

@@ -1,0 +1,22 @@
+1. Create an environment file: vi /etc/sysconfig/mailgraph
+#Mailgraph
+MAIL_LOG=/var/log/maillog
+PID_FILE=/var/run/mailgraph.pid
+RRD_DIR=/home/rrd
+
+1. Create a file in the directory:  /etc/systemd/system/: units installed by the system administrator
+
+
+
+[Unit]
+Description=MailGrpah daemon
+After=syslog.target network.target postfix.service
+
+[Service]
+EnvironmentFile=/etc/sysconfig/mailgraph
+ExecStart=/usr/local/bin/mailgraph.pl -l $MAIL_LOG --daemon-pid=$PID_FILE --daemon-rrd=$RRD_DIR --only-mail-rrd
+KillMode=process
+ExecStopPost=/usr/bin/rm -f $PID_FILE
+
+[Install
+WantedBy]]=multi-user.target

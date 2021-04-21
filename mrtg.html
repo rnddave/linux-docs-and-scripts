@@ -1,0 +1,137 @@
+<html>
+<head>
+  <title>MRTG on RedHat EL5</title>
+  <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+
+<h3>MRTG on RedHat EL5</h3>
+
+<p>
+MRTG is used to monitor the bandwidth usage on Routers and Switches
+Topics in this document:
+        <ol>
+                <li><a href=#INSTALL>Installation of MRTG</a></li>
+                <li><a href=#CONFIG>Configuration of MRTG</a></li>
+                <li><a href=#CFGMAKER>Create the MRTG configuration file</a></li>
+                <li><a href=#CRONTAB>Schedule a MRTG job</a></li>
+                <li><a href=#VIEW>View the MRTG Graphs</a></li>
+                <li><a href=#CLEAN>Clean old PNG files</a></li>
+        </ol>
+</p>
+
+<hr>
+
+<ol>
+
+<li>
+  <a name=INSTALL></a><h4>Installation of MRTG</h4>
+  <p>
+	MRTG comes with the RedHat distribution. For the use of RRD databases RRDtool is needed. RRDtool is in the EPEL repository.
+	A viewer for RRD databases is mrtg-rrd.
+	To install the RPM's and the viewer:
+	<ul>
+		<li>To check if it already installed: <b>rpm -qa mrtg rrdtool </b></li>
+		<li>To install: <b>yum -y install mrtg rrdtool </b></li>
+		<li>To install the viewer:
+			<ul>
+				<li><b>wget ftp://ftp.linux.cz/pub/linux/people/jan_kasprzak/mrtg-rrd/mrtg-rrd-0.7.tar.gz</b></li>
+				<li><b>tar -xzvf mrtg-rrd-0.7.tar.gz mrtg-rrd-0.7/mrtg-rrd.cgi</b></li>
+				<li><b>cp mrtg-rrd.cgi /var/www/cgi-bin/</b></li>
+				<li><b>vi /var/www/cgi-bin/mrtg-rrd.cgi</b> Make the following change in the line:
+					<table border=""><tr><td bgcolor=lightgrey><pre>
+BEGIN { @config_files = qw(/usr02/mrtg/conf/mrtg.conf); }
+					</pre></td></tr></table>
+				</li>
+			</ul>
+		</li>
+		<li>Create directories:
+			<ul>
+				<li><b>mkdir -p /usr02/mrtg/{conf,data,images}</b></li>
+				<li><b>chmod 2775 /usr02/mrtg/{conf,data,images}</b></li>
+				<li><b>chown gcarr.users /usr02/mrtg/{conf,data}</b></li>
+				<li><b>chown gcarr.apache /usr02/mrtg/images</b></li>
+			</ul>
+		</li>
+	</ul>
+  </p>
+</li>
+
+<li>
+  <a name=CONFIG></a><h4>Configuration of MRTG</h4>
+  <p>
+	During the installation of Nagios the file <i>/usr/local/bin/create_mrtg_conf.bash</i> is already installed. MRTG will run as a non-root user.
+	The steps described overhere has to be done as a non-root user:
+	<ul>
+		<li><b>vi /usr02/mrtg/conf/devices.lst</b> The file lists the devices to be monitored:
+			<table border=""><tr><td bgcolor=lightgrey><pre>
+#devices.lst: Monitor the devices in this list with MRTG
+#
+# Specify 1 IP address on a line
+# Comment lines start with a #
+# Empty lines are allowed
+    
+#$LOCAL_OFFICE_NAME-mpls
+10.31.16.1
+
+#$LOCAL_OFFICE_NAME-vpn
+10.31.16.2
+
+#$COMPANY-fw22 (The $LOCAL_OFFICE_NAME Extranet)
+10.31.16.3
+			</pre></td></tr></table>
+		</li>
+	</ul>
+  </p>
+</li>
+
+<li>
+  <a name=CFGMAKER></a><h4>Create the MRTG configuration file</h4>
+	<p>
+	<b>/usr/local/bin/create_mrtg_conf.bash -g -l</b> (will create the file /usr02/mrtg/conf/mrtg.conf, log file /var/log/$COMPANY/create_mrtg_conf.log)
+	</p>
+</li>
+
+<li>
+  <a name=CRONTAB></a><h4>Schedule a MRTG job</h4>
+	<p>
+	<b>crontab -e</b>
+		<table border=""><tr><td bgcolor=lightgrey><pre>
+SHELL=/bin/bash
+
+1-59/5 * * * * if [ -f /usr02/mrtg/conf/mrtg.conf ] ; then env LANG=C /usr/bin/mrtg /usr02/mrtg/conf/mrtg.conf 2&gt;/dev/null ; fi
+		</pre></td></tr></table>
+	</p>
+</li>
+
+<li>
+  <a name=VIEW></a><h4>View the MRTG Graphs</h4>
+  <p>
+	The following URL's are valid:
+	<ul>
+		<li><b>http://$LOCAL_OFFICE_NAME-mon1/cgi-bin/mrtg-rrd.cgi</b></li>
+		<li><b>http://$LOCAL_OFFICE_NAME-mon1/cgi-bin/mrtg-rrd.cgi/10.31.16.2</b></li>
+		<li><b>http://10.31.17.9/cgi-bin/mrtg-rrd.cgi/10.31.16.2/10.31.16.2_gi0_0.html</b></li>
+	</ul>
+  </p>
+</li>
+
+<li>
+  <a name=CLEAN></a><h4>Clean old PNG files</h4>
+	<p>
+		Scedule the job <b>/usr/local/bin/mrtg_clean_png.bash -g</b> in the crontab of root:
+		<ul>
+			<li><b>crontab -e</b>
+				<table border=""><tr><td bgcolor=lightgrey><pre>
+#KKistemaker (2009sep21): Clean the temp PNG files created by mrtg-rrd:
+30 22 * * * /usr/local/bin/mrtg_clean_png.bash -g &gt;/dev/null
+				</pre></td></tr></table>
+			</li>
+		</ul>
+	</p>
+</li>
+
+</ol>
+
+</body>
+</html>

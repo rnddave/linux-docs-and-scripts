@@ -1,0 +1,137 @@
+<html>
+<head>
+ <title>RHEL7 Samba configuration</title>
+ <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+ <h3>RHEL7 Samba configuration</h3>
+
+ <p>
+    To be able to access Windows file shares or access directories on the Linux server Samba is used.
+    <ol>
+        <li><a href=#AD>Make the Linux server member of the Windows AD</a></li>
+        <li><a href=#SMBCLIENT>Use smbclient to access Windows shares</a></li>
+        <li><a href=#AUTOMOUNT>Use autofs to access Windows shares</a></li>
+    </ol>
+ </p>
+
+ <br><hr><br>
+
+ <ol>
+    <li><a name=AD></a><h4>Make the Linux server member of the Windows AD</h4>
+        <p>
+            To access Shares/directories on a Linux box with AD credentials, the Linux box should be member
+            of the AD. To add the Linux box to the AD, Samba should be configured and the samba daemon should be running.
+            <ul>
+                <li>Configure Samba: <b>vi /etc/samba/smb.conf</b>
+                    <table border class=pre_view><tr><td><pre>
+  workgroup = $COMPANY
+  security = ADS
+  realm = $COMPANY.CH1B.$COMPANYEPC.COM
+  load printers = no
+  printcap name = /dev/null
+  disable spoolss = yes
+; cups options = raw
+#$COMPANY entries:
+preserve case = yes
+ 
+locking = yes
+strict locking = no
+oplocks = no
+level2 oplocks = no
+; optionally map AD users to local users
+username map = /etc/samba/smbusers
+
+[homes]
+   comment = Home Directories
+   browseable = no
+   writable = yes
+   valid users = %S
+   create mode = 0664
+   directory mode = 0775
+
+[Nagios]
+  comment = Nagios Configuration file
+  path = /usr01/nagios/cfg
+  writable = yes
+  create mask = 0664
+  directory mask = 0775
+
+[Syslog]
+  comment = Syslog files
+  path = /usr02/syslog
+  writable = no
+; Give root access to users in the users group
+  admin users = @users
+
+[floor-plan]
+  comment = Floor Plan
+  path = /usr01/floor-plan/data
+  read only = yes
+  write list = @floor-plan
+  create mask = 0664
+  directory mask = 0775
+                    </pre></td></tr></table>
+                </li>
+
+                <li>
+                    Optionally map AD users to local users: <b>vi /etc/samba/smbusers</b>
+                    <table border class=pre_view><tr><td><pre>
+cmstran = $COMPANY\$USER
+                    </pre></td></tr></table>
+                </li>
+
+                <li><b>kinit $USER_NAME@$COMPANY.CH1B.$COMPANYEPC.COM</b> (a user with rights to add machines into the AD</li>
+                <li><b>net ads join -U $USER_NAME</b></li>
+                <li>Start the Samba daemon: <b>systemctl enable smb.service; systemctl start smb.service</b></li>
+                <li>Port TCP/445 should be opened in the Linux Firewall</li>
+                <li>Test access from a Windows PC.</li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=SMBCLIENT></a><h4>Use smbclient to access Windows shares</h4>
+        <p>
+            To access a Windows Share from a linux box smbclient is used. The samba daemon does not have to run, nor does /etc/samba/smb.conf needs
+            to be configured.
+            <ul>
+                <li>To list the available shares: <b>smbclient -U $USER_NAME -L $LOCAL_OFFICE_NAME-bu1</b></li>
+                <li>To connect to a share: <b>smblient -U $USER_NAME //$LOCAL_OFFICE_NAME-bu1/c\$</b></li>
+                <li>Smbclient has ftp commands to transfer files, like put and get</li>
+                <li>To use Kerberos: <b>kinit $USER_NAME@$COMPANY.CH1B.$COMPANYEPC.COM</b> and connect to a share: <b>smbclient -k //$LOCAL_OFFICE_NAME-bu1/c\$</b></li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=AUTOMOUNT></a><h4>Use autofs to access Windows shares</h4>
+        <p>
+            A Windows share can be mounted by a Linux box. This makes access to the Windows files transparent. It is possible to mount the Share
+            during boot time and keep it mounted all the time, but this will give problems when the Windows server is rebooted. A much better approach
+            is to use autofs. It mounts the share when needed and unmounts the share after some idle time. Similar to smbclient the samba
+            daemon does not have to run.
+            <ul>
+                <li><b>vi /etc/auto.master</b> and add the line: <i>/cifs  /etc/auto.cifs</i></li>
+                <li><b>mkdir /cifs</b></li>
+                <li><b>vi /etc/smbcred-hagpebi1a</b>
+                    <table border class=pre_view><tr><td><pre>
+username=ADUSER
+password=PASSWORD
+domain=$COMPANY
+                    </pre></td></tr></table>
+                </li>
+                <li><b>vi /etc/auto.cifs</b>
+                    <table border class=pre_view><tr><td><pre>
+clockings_nl    -fstype=cifs,ro,uid=500,gid=503,credentials=/etc/smbcred-hagpebi1a       ://hagpebi1a/export_itime
+                    </pre></td></tr></table>
+                </li>
+                <li>Start autofs: <b>systemctl enable autofs.service; systemctl start autofs.service</b></li>
+                <li>To test: <b>ls /cifs/clockings_nl>; df -ht cifs</b> (the Windows share should be mounted)</li>
+            </ul>
+        </p>
+    </li>
+
+ </ol>
+
+</body>
+</html>
+

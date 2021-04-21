@@ -1,0 +1,487 @@
+<html>
+<head>
+ <title>Installation RHEL7</title>
+ <link rel=stylesheet type="text/css" href="css/style.css">
+</head>
+<body>
+ <h3>Installation RedHat EL7</h3>
+
+ <p>
+    The installation and configuration of RedHat RHEL7 differs from the previous versions. The main difference
+    is the use of <b>systemd</b> instead of <b>init</b>.
+
+    <ol>
+        <li><a href=#INSTALL>Installation</a></li>
+        <li><a href=#FILESYSTEMS>Filesystems</a></li>
+        <li><a href=#PACKAGES>Packages</a></li>
+        <li><a href=#NETWORK>Networking</a></li>
+        <li><a href=#USERS>User administration</a></li>
+        <li><a href=#FIREWALL>Firewall administration</a></li>
+        <li><a href=#MAIL>Configure postfix mail</a></li>
+        <li><a href=#HARDENING>Hardening</a></li>
+        <li><a href=#NTP>NTP time</a></li>
+        <li><a href=#SNMP>SNMP Monitoring</a></li>
+        <li><a href=#NAGIOS>Nagios Client</a></li>
+        <li>Additional applications running on RHEL7:
+            <ul>
+                <li>Configure <a href=rsyslog_rhel7.html>RSYSLOG</a></li>
+                <li><a href=rhel7_samba.html>Samba:</a> make a Linux server member of the $COMPANY AD domain</li>
+                <li><a href=../applications/ftp-dmz.html>vsftpd server</a></li>
+                <li><a href=../applications/sftp.html>sftp server</a> (with rssh)</li>
+                <li>Configure autofs (see the <a href=rhel7_samba.html>Samba</a> configuration)</li>
+                <li>Configure nfs</li>
+                <li>Apache Web Server</li>
+                <li>Apache Reverse Proxy</li>
+                <li>Squid Proxy Server</li>
+                <li><a href=nagios_installation.html>Nagios Monitoring Server</a></li>
+                <li><a href=../applications/rcs.html>RCS version control</a></li>
+            </ul>
+        </li>
+    </ol>
+ </p>
+
+ <br><hr><br>
+
+ <ol>
+    <li><a name=INSTALL></a><h4>Installation</h4>
+        <p>
+            The drive is to do a clean installation and only have installed what is needed. For this purpose the <b>minimal</b> selection
+            is chosen. The installation ends up this way with a very basic system.<br>
+            The other decision to be made during installation is the filesystem setup. See <a href=#FILESYSTEMS>Filesystems</a> for the details.<br>
+        </p>
+        <p>
+            To do a VNC or Kickstart installation, press &lt;ESCAPE&gt; during the boot and type
+            <ul>
+                <li><b>linux vnc</b> (for a VNC installation)</li>
+                <li><b>linux ks=http://10.31.20.33/xos4/ks/$HOSTNAME.cfg</b> (for a Kickstart installation)</li>
+            </ul>
+        </p>
+        <p>
+            Patch the server to the latest patchlevel after the installation:
+            <ul>
+                <li>Configure yum: <b>vi /etc/yum.conf</b> (add the line: <i>proxy=http://$SQUID_SERVER:3128</i> to configure a proxy server)</li>
+                <li><b>yum -y update</b></li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=FILESYSTEMS></a><h4>Filesystems</h4>
+        <p>
+            RHEL7 will install by default LVM and XFS filesystems. EXT4 is still available, but not recommended. BTRFS is available as well,
+            but is not yet ready for production enviromnents. The file systems differ from RHEL6; /usr is no longer a separate filesystem. This
+            is a requirement of <b>systemd</b>. File system /tmp is not a physical filesystem.
+        </p>
+        <p>
+            During the installation create:
+            <ul>
+                <li><b>/boot</b> 500MB, xfs filesystem on /dev/sda1</li>
+                <li><b>/</b> 6GB, xfs filesystem in LVM</li>
+                <li><b>swap</b> 2GB (size depends on the memory size) filesystem in LVM</li>
+                <li><b>/var</b> 3GB, xfs filesystem in LVM</li>
+                <li><b>/home</b> 2GB, xfs filesystem in LVM</li>
+            </ul>
+        </p>
+        <p>
+            After the installation:
+            <ul>
+                <li>Create the TMP filesystem: <b>systemctl enable tmp.mount</b> (to check: <b>systemctl is-enabled tmp.mount</b></li>
+                <li>
+                    Extend the LVM on the systemdisk (the installation creates a minimal sized PV):
+                    <ul>
+                        <li><b>fdisk /dev/sda</b> (and create a LVM partition on the remaining space</li>
+                        <li><b>partprobe</b> (to make /dev/sda3 available)</li>
+                        <li><b>pvcreate /dev/sda3</b> (create a PV on /dev/sda3)</li>
+                        <li><b>vgextend centos /dev/sda3</b> (extend the VG with /dev/sda3. To find the VG name: <b>vgs</b>)</li>
+                    </ul>
+                </li>
+            </ul>
+        </p>
+        <p>Extend an XFS filesystem:
+            <ul>
+                <li><b>vgs</b> (to check the available space)</li>
+                <li><b>lvextend -L +20G //dev/mapper/centos-var</b></li>
+                <li><b>xfs_growfs /dev/mapper/centos-var</b></li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=PACKAGES></a><h4>Packages</h4>
+        <p>
+            The minimal installation is truly minimal and additional packages have to be installed.
+            <table border class=pre_view><tr><td><pre>
+yum -y install \
+  krb5-workstation \
+  pam_krb5 \
+  nmap \
+  tcpdump \
+  bc \
+  elinks \
+  dos2unix \
+  zip \
+  unzip \
+  mutt \
+  nano \
+  net-snmp \
+  net-snmp-agent-libs \
+  net-snmp-perl \
+  net-snmp-utils \
+  rsync \
+  screen \
+  vim-common \
+  vim-enhanced \
+  vim-filesystem \
+  wget \
+  rcs \
+  net-tools \
+  open-vm-tools \
+  iptables-services \
+  bind-utils \
+  logwatch
+            </pre></td></tr></table>
+            To install the webserver: <b>yum -y groupinstall "Basic Web Server"</b> (view the available groups: <b>yum grouplist</b>)
+        </p>
+        <ul>
+            <li>To install packages from <b>epel</b>: <b>rpm -Uvh --httpproxy $SQUID_SERVER --httpport 3128 https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm</b></li>
+            <li><b>yum -y install atop fping iperf nethogs nagios-plugins-all</b></li>
+        </ul>
+    </li>
+
+    <li><a name=NETWORK></a><h4>Networking</h4>
+        <p>
+            Probably during the installation DHCP is used and after the installation a fixed IP is configured:
+            <ul>
+                <li>Set the hostname: <b>vi /etc/hostname</b> (RHEL7 finds the hostname by default in the DNS)</li>
+                <li>Disable NetworkManager, because it overwrites /etc/resolv.conf at every boot:
+                        <b>systemctl stop NetworkManager.service; systemctl disable NetworkManager.service</b>
+                </li>
+                <li>Start VMware tools: <b>systemctl enable vmtoolsd.service; systemctl start vmtoolsd.service</b></li>
+                <li>If the network interface name has changed generate a new UUID: <b>uuidgen eno16777984</b></li>
+                <li>Edit the network interface file to configure a static IP <b>vi /etc/sysconfig/network-scripts/ifcfg-eno16777984</b>:
+                    <table border class=pre_view><tr><td><pre>
+NAME="eno16777984"
+DEVICE="eno16777984"
+ONBOOT=yes
+NETBOOT=yes
+UUID="59a5d5ac-a9fd-4df9-bfb4-33e33e35c753"
+IPV6INIT=no
+BOOTPROTO=static
+IPADDR=10.226.1.8
+NETMASK=255.255.255.0
+GATEWAY=10.226.1.254
+DNS1="10.226.1.10"
+DNS2="10.226.1.11"
+TYPE=Ethernet
+                    </pre></td></tr></table>
+                </li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=USERS></a><h4>User administration</h4>
+        <p>User administration does not differ from RHEL6 or RHEL5
+            <ul>
+                <li><b>vi /etc/pam.d/su</b> and uncomment the line: <i>auth      required    pam_wheel.so use_uid</i></li>
+                <li><b>visudo</b> (and make sure the line: <i>%wheel    ALL=(ALL)   ALL</i> is there, seems to be the default in RHEL7)
+                <li>Enable Kerberos authentication: <b>authconfig-tui</b><br>
+                    <b>vi /etc/krb5.conf</b> (add an additonal authentication server)
+                    <table border class=pre_view><tr><td><pre>
+[logging]
+ default = FILE:/var/log/krb5libs.log
+ kdc = FILE:/var/log/krb5kdc.log
+ admin_server = FILE:/var/log/kadmind.log
+
+[libdefaults]
+ dns_lookup_realm = false
+ ticket_lifetime = 24h
+ renew_lifetime = 7d
+ forwardable = true
+ rdns = false
+ default_ccache_name = KEYRING:persistent:%{uid}
+
+ default_realm = $DOMAIN_NAME.COM
+ dns_lookup_kdc = false
+[realms]
+ $DOMAIN_NAME.COM = {
+  kdc = 10.226.1.10:88
+  kdc = 10.226.1.11:88
+  admin_server = 10.226.1.10:749
+  admin_server = 10.226.1.11:749
+ }
+
+[domain_realm]
+ $DOMAIN_NAME.com = $DOMAIN_NAME.COM
+ $DOMAIN_NAME.com = $DOMAIN_NAME.COM
+                    </pre></td></tr></table>
+                </li>
+                <li>To create an admin user:
+                    <b>useradd -u 1001 -c "$REAL_NAME (Unix administrator)" -G wheel,users $USER_NAME</b>
+                </li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=FIREWALL></a><h4>Firewall administration</h4>
+        <p>
+            To simplify the firewall configuration, the firewall is by default configured with the <b>firewalld</b> daemon. Firewalld
+            builds iptables rules. For simple rules this works, but for fine tuning iptables is better.<br>
+            Some commands to configure rules with Firewalld:
+            <table border class=pre_view><tr><td><pre>
+firewall-cmd --get-active-zones
+firewall-cmd --zone=public --list-all
+firewall-cmd --get-services
+firewall-cmd --reload
+firewall-cmd --zone=public --add-service http --permanent
+firewall-cmd --zone=public --add-service http
+firewall-cmd --zone=public --add-port=161/udp --permanent
+firewall-cmd --zone=public --add-port=161/udp
+            </pre></td></tr></table>
+            To disable firewalld and configure it direct with iptables:
+            <ul>
+                <li><b>yum -y install iptables-services</b></li>
+                <li><b>systemctl stop firewalld.service</b></li>
+                <li><b>systemctl disable firewalld.service</b></li>
+                <li><b>vi /etc/sysconfig/iptables</b></li>
+                <li><b>systemctl enable iptables.service</b></li>
+                <li><b>systemctl start iptables.service</b></li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=MAIL></a><h4>Configure postfix mail</h4>
+        <p>Configure Postfix to send emails:
+            <ul>
+            <li><b>vi /etc/postfix/canonical</b>
+                <table border class=pre_view><tr><td><pre>
+root            cln.checkpoint@$DOMAIN_NAME.com
+root@$DOMAIN_NAME.com    cln.checkpoint@$DOMAIN_NAME.com
+nagios          nagios-the$LOCAL_OFFICE_NAME@$DOMAIN_NAME.com
+nagios@$DOMAIN_NAME.com  nagios-$HOSTNAME@$DOMAIN_NAME.com
+$USER            $USER_NAME@$DOMAIN_NAME.com
+$USER@$DOMAIN_NAME.com    $USER_NAME@$DOMAIN_NAME.com
+                </pre></td></tr></table>
+            </li>
+            <li>Create the canonical map: <b>postmap /etc/postfix/canonical</b></li>
+            <li><b>vi /etc/postfix/main.cf</b>
+                <table border class=pre_view><tr><td><pre>
+mydomain = $DOMAIN_NAME.com
+myorigin = $mydomain
+inet_protocols = ipv4
+mynetworks_style = host
+relayhost = [10.31.17.159]
+ 
+# $COMPANY entries
+# Sender rewriting: 
+#     vi /etc/postfix/canonical
+#     postmap /etc/postfix/canonical
+#     postfix reload
+canonical_maps = hash:/etc/postfix/canonical
+                </pre></td></tr></table>
+            </li>
+            <li>Reload postfix: <b>postfix reload</b></li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=HARDENING></a><h4>Hardening</h4>
+        <p>Default hardening of Linux servers at $COMPANY perform the following tasks:
+        <ul>
+            <li>Login banner: <b>vi /etc/issue /etc/issue.net</b>
+                <table border class=pre_view><tr><td><pre>
+***************************************************************************
+*                                                                         *
+* Welcome to $COMPANY.                                                        *
+*                                                                         *
+* This property belongs to $COMPANY, unauthorised access is prohibited.       *
+* Do not attempt to login, unless you are an authorised user.             *
+*                                                                         *
+***************************************************************************
+                </pre></td></tr></table>
+            </li>
+
+            <li>Message of the Day: <b>vi /etc/motd</b>
+                <table border class=pre_view><tr><td><pre>
+$COMPANY. All activity may be monitored and reported.
+                </pre></td></tr></table>
+            </li>
+
+            <li>Hardening of Secure Shell: <b>vi /etc/ssh/sshd_config</b>
+                <table border class=pre_view><tr><td><pre>
+PermitRootLogin no
+# To allow PublicKey Authentication for root:
+# PermitRootLogin without-password
+
+PasswordAuthentication no
+Banner /etc/issue.net
+ 
+AllowGroups users
+                </pre></td></tr></table>
+            </li>
+
+            <li><b>vi /etc/security/limits.conf</b>
+                <table border class=pre_view><tr><td><pre>
+*               soft    core            0
+*               hard    core            0
+                </pre></td></tr></table>
+            </li>
+
+            <li>Kernel parameters: <b>vi /etc/sysctl.conf</b>
+                <table border class=pre_view><tr><td><pre>
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.conf.default.secure_redirects = 0
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.default.log_martians = 1
+net.ipv4.conf.all.rp_filter = 1
+net.ipv6.conf.all.disable_ipv6=1
+                </pre></td></tr></table>
+                <b>sysctl -p</b>
+            </li>
+
+            <li>Disable kernel modules: <b>vi /etc/modprobe.d/cis.conf</b>
+                <table border class=pre_view><tr><td><pre>
+install cramfs /bin/true
+install squashfs /bin/true
+install jffs2 /bin/true
+install udf /bin/true
+install dccp /bin/true
+install sctp /bin/true
+install rds /bin/true
+install tipc /bin/true
+                </pre></td></tr></table>
+            </li>
+
+            <li>Mountpoints: <b>vi /etc/fstab</b>
+                <table border class=pre_view><tr><td><pre>
+/dev/mapper/centos-home /home                   xfs     defaults,nodev        0 0
+/dev/mapper/centos-var  /var                    xfs     defaults,nodev        0 0
+                </pre></td></tr></table>
+            </li>
+
+            <li>Create a $COMPANY log directory: <b>mkdir /var/log/; chmod 1777 /var/log/$COMPANY</b></li>
+
+            <li>Create a $COMPANY login script: <b>vi /etc/profile.d/$COMPANY.sh</b>
+                <table border class=pre_view><tr><td><pre>
+#$COMPANY login Script
+
+export HISTTIMEFORMAT="%F %T "
+export HISTFILESIZE=2000
+
+                </pre></td></tr></table>
+            </li>
+
+            <li>Remove aliases from <b>vi ~/.bashrc</b></li>
+
+            <li>Enable vi mode for root: <b>vi ~/.inputrc</b>
+                <table border class=pre_view><tr><td><pre>
+set editing-mode vi
+"\C-l":clear-screen
+                </pre></td></tr></table>
+            </li>
+
+            <li>Remove aliases from <b>/root/.bashrc</b></li>
+        </ul>
+        </p>
+        <p>
+            Hardening is based on the documentation of <a href=http://www.cisecurity.org>http://www.cisecurity.org</a><br>
+            The Hardening document from CISecurity for RHEL7 can be found <a href=CIS_Red_Hat_Enterprise_Linux_7_Benchmark_v1.1.0.pdf>here</a><br>
+            To test/check the hardening:
+            <ul>
+                <li>Download <a href=rhel7_hardening.tgz>rhel7_hardening.tgz</a></li>
+                <li><b>tar -xzvf rhel7_hardening.tgz; cd rhel7_hardening</b></li>
+                <li><b>for ff in {1..9}; do bash rhel7_cis_${ff}.bash -t; done</b></li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=NTP></a><h4>NTP Time</h4>
+        <p>
+            By default the new <b>chrony</b> daemon is installed. To install NTP:
+            <ul>
+                <li><b>yum -y install ntp ntpdate</b></li>
+                <li><b>systemctl stop chronyd.service</b></li>
+                <li><b>systemctl disable chronyd.service</b></li>
+                <li><b>vi /etc/ntp.conf</b> (add the internal NTP servers)</li>
+                <li><b>systemctl enable ntpd.service</b></li>
+                <li><b>systemctl start ntpd.service</b></li>
+                <li><b>ntpq -n</b> (to check the status)</li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=SNMP></a><h4>SNMP Monitoring</h4>
+        <p>
+            To configure SNMP:
+            <ul>
+                <li><b>vi /etc/snmp/snmpd.con</b>
+                    <table border class=pre_view><tr><td><pre>
+com2sec      myLoopNet          localhost                     PASSWORD
+com2sec      $COMPANY-solarwinds01   10.128.56.160/255.255.255.240 PASSWORD
+com2sec      $COMPANY-solarwinds02   10.232.35.0/255.255.255.0     PASSWORD
+com2sec      $SNIP     10.36.90.8/255.255.255.255    PASSWORD
+com2sec      $SNIP         10.31.17.8/255.255.255.255    PASSWORD
+com2sec      $SNIP          10.226.1.8/255.255.255.255    PASSWORD
+
+group    myRWGroup      v2c           myLoopNet
+group    myRWGroup      v2c           $COMPANY-solarwinds01
+group    myRWGroup      v2c           $COMPANY-solarwinds02
+group    myRWGroup      v2c           $SNIP
+group    myRWGroup      v2c           $SNIP
+group    myRWGroup      v2c           $SNIP
+
+view    all    included   .1
+
+access  myRWGroup ""      any       noauth    0  all all all
+
+syslocation The $LOCAL_OFFICE_NAME
+                    </pre></td></tr></table>
+                </li>
+                <li><b>systemctl enable snmpd.service</b></li>
+                <li><b>systemctl start snmpd.service</b></li>
+                <li>To test: <b>snmpwalk -v 2c -c <i>PASSWORD</i> hagpmon01 system</b></li>
+            </ul>
+        </p>
+    </li>
+
+    <li><a name=NAGIOS></a><h4>Nagios client</h4>
+        <p>Configure the nagios client to monitor the Linux server:
+            <ul>
+                <li><b>yum -y install nagios-plugins-all</b></li>
+                <li><b>useradd -u 7123 -c "Nagios Plugins" -G users nagiosplugin</b></li>
+                <li><b>mkdir ~nagiosplugin/.ssh; chown nagiosplugin ~nagiosplugin/.ssh; chmod 700 ~nagiosplugin/.ssh</b></li>
+                <li><b>File=~nagiosplugin/.ssh/authorized_keys; vi $File; chmod 600 $File</b></li>
+                <li>Content of ~nagiosplugin/.ssh/authorized_keys:
+                    <table border class=pre_view><tr><td><pre>
+ssh-dss AAAAB3NzaC1kc3MAAACBAJDBBUOGdTjU+tlQhVgYTgZ1vezD6+Sp8bqtcDpNn4cIRYhJtsj8Olv81YhbYOBC8nB7isCKSGotB757vY70g0Qxq6VTHQW5NhCXoTw3s9bR99CjzeFxi/Sb/VLjboT5nhPpDRZuo5NBWa8VyeuNqwd8nB1b2l1Be0FLRNSZtBKbAAAAFQCarfC9ca8PQR7V6nLAZEolpx2IOwAAAIEAi4/DkQapggOSQ0oGRntfPp5C8EFBfdVwU5TUwTBtM1FyI1vCd3kyM08HmWDuMukw0z0V11nVeg3B17z01syCFDZzkMe+DV6lhRgMSB8xz9diSmwFUBju2dnkKS2xKpyAhlwcThE6dUZwT2g1fmfCwmlQF8TGbGHxZpvAwGRYmNEAAACBAI2JqeTsj2Qk0uP/fILPXjFaxbpvmHdaSZP5TElnqPvdjHmPzngPYJvWWJVF6FnsTf9VOd7xCsE28BYi61rFyeBmssNuI7ebGKGKrn+Qfgk2bgR0p7aLqenukqJjpIKQRp+9Dc739Nw14nDpFGe0gPhpGouWbwGjdKNJ+kOkKLxX Nagios check_by_ssh key
+                    </pre></td></tr></table>
+                </li>
+                <li><b>vi /usr/local/exec_nagios_plugin; chmod 755 /usr/local/exec_nagios_plugin</b></li>
+                <li>Content of ~nagiosplugin/.ssh/authorized_keys:
+                    <table border class=pre_view><tr><td><pre>
+#!/bin/bash
+
+if [[ -d /usr/lib64 ]]
+then
+ Arch=64
+else
+ Arch=""
+fi
+
+if [[ -x /usr/lib$Arch/nagios/plugins/$1 ]]
+then
+ /usr/lib$Arch/nagios/plugins/$*
+ exit $?
+else
+ exit 2
+fi
+                    </pre></td></tr></table>
+                </li>
+            </ul>
+        </p>
+    </li>
+
+ </ol>
+</body>
+</html>
